@@ -6,15 +6,18 @@ export enum PositionSide {
 export interface TradeState {
   price: string;
   amount: string; // Margin/Principal in USDT
+  stopLoss: string; // Stop Loss Price
 }
 
 export interface CalculationResult {
   tp1: TargetLevel;
   tp2: TargetLevel;
   tp3: TargetLevel;
+  stopLoss: number;
   entryPrice: number;
   leverage: number;
   totalProfit: number;
+  riskAmount: number;
 }
 
 export interface TargetLevel {

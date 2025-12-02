@@ -12,8 +12,8 @@ const App: React.FC = () => {
   const [leverage, setLeverage] = useState<number>(100);
   
   // Inputs stored separately to preserve data when switching tabs
-  const [longState, setLongState] = useState<TradeState>({ price: '', amount: '' });
-  const [shortState, setShortState] = useState<TradeState>({ price: '', amount: '' });
+  const [longState, setLongState] = useState<TradeState>({ price: '', amount: '', stopLoss: '' });
+  const [shortState, setShortState] = useState<TradeState>({ price: '', amount: '', stopLoss: '' });
   
   // Total Capital for the 5% calculation helper
   const [totalCapital, setTotalCapital] = useState<string>('10000');
@@ -41,46 +41,56 @@ const App: React.FC = () => {
   const result: CalculationResult | null = useMemo(() => {
     const entryPrice = parseFloat(activeState.price);
     const margin = parseFloat(activeState.amount);
+    const stopLossPrice = parseFloat(activeState.stopLoss);
     
     if (isNaN(entryPrice) || isNaN(margin) || entryPrice <= 0 || margin <= 0) {
       return null;
     }
-
-    // Logic Explanation based on user request:
-    // Risk/Reward 1:1 implies getting 100% ROE (doubling margin) if Risk is liquidation (100% loss).
-    // TP1: 1:1 (100% ROE) -> Sell 50%
-    // TP2: 1:1.5 (150% ROE) -> Sell 30%
-    // TP3: 1:3.5 (350% ROE) -> Sell 20%
     
-    // Price movement % required for 100% ROE = 1 / Leverage
-    const moveFor100Percent = 1 / leverage;
+    if (isNaN(stopLossPrice) || stopLossPrice <= 0) {
+      return null;
+    }
 
-    const calculateTarget = (roeMultiple: number, qtyPercent: number, label: string): TargetLevel => {
-      const requiredMove = moveFor100Percent * roeMultiple;
+    // Validate stop loss direction
+    if (side === PositionSide.LONG && stopLossPrice >= entryPrice) {
+      return null; // Stop loss must be below entry for long
+    }
+    if (side === PositionSide.SHORT && stopLossPrice <= entryPrice) {
+      return null; // Stop loss must be above entry for short
+    }
+
+    // Calculate risk (distance from entry to stop loss)
+    const riskPriceMove = Math.abs(entryPrice - stopLossPrice);
+    const riskPercent = riskPriceMove / entryPrice;
+    const riskAmount = margin * riskPercent * leverage; // Actual dollar risk
+
+    // Calculate targets based on risk/reward ratios
+    const calculateTarget = (rrRatio: number, qtyPercent: number, label: string): TargetLevel => {
+      const rewardPriceMove = riskPriceMove * rrRatio;
       
       let targetPrice: number;
       if (side === PositionSide.LONG) {
-        targetPrice = entryPrice * (1 + requiredMove);
+        targetPrice = entryPrice + rewardPriceMove;
       } else {
-        targetPrice = entryPrice * (1 - requiredMove);
+        targetPrice = entryPrice - rewardPriceMove;
       }
 
-      // Profit = Margin * ROE * QtyPercent
-      // ROE is technically roeMultiple (e.g. 1.0, 1.5)
-      const pnl = margin * roeMultiple * qtyPercent;
+      // PnL for this target (based on the position quantity sold at this level)
+      const rewardAmount = riskAmount * rrRatio;
+      const pnl = rewardAmount * qtyPercent;
 
       return {
         price: targetPrice,
         pnl: pnl,
-        roe: roeMultiple,
+        roe: (rewardAmount / margin) * 100, // ROE as percentage
         percentQty: qtyPercent,
         label
       };
     };
 
-    const tp1 = calculateTarget(1.0, 0.5, 'TP 1 (Risk/Reward 1:1)');
-    const tp2 = calculateTarget(1.5, 0.3, 'TP 2 (Risk/Reward 1:1.5)');
-    const tp3 = calculateTarget(3.5, 0.2, 'TP 3 (Risk/Reward 1:3.5)');
+    const tp1 = calculateTarget(1.0, 0.5, 'TP1 (1:1) 50%仓位');
+    const tp2 = calculateTarget(1.5, 0.3, 'TP2 (1:1.5) 30%仓位');
+    const tp3 = calculateTarget(3.5, 0.2, 'TP3 (1:3.5) 20%仓位');
 
     const totalProfit = tp1.pnl + tp2.pnl + tp3.pnl;
 
@@ -88,9 +98,11 @@ const App: React.FC = () => {
       tp1,
       tp2,
       tp3,
+      stopLoss: stopLossPrice,
       entryPrice,
       leverage,
-      totalProfit
+      totalProfit,
+      riskAmount
     };
 
   }, [activeState, leverage, side]);
@@ -99,12 +111,13 @@ const App: React.FC = () => {
   const chartData = useMemo(() => {
     if (!result) return [];
     return [
+      { name: 'SL', price: result.stopLoss, type: 'sl' },
       { name: 'Entry', price: result.entryPrice, type: 'entry' },
       { name: 'TP1', price: result.tp1.price, type: 'tp' },
       { name: 'TP2', price: result.tp2.price, type: 'tp' },
       { name: 'TP3', price: result.tp3.price, type: 'tp' },
-    ];
-  }, [result]);
+    ].sort((a, b) => side === PositionSide.LONG ? a.price - b.price : b.price - a.price);
+  }, [result, side]);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 pb-12 font-sans selection:bg-primary/30">
@@ -117,7 +130,7 @@ const App: React.FC = () => {
           </h1>
         </div>
         <div className="text-xs font-medium px-2 py-1 rounded bg-slate-800 text-slate-400 border border-slate-700">
-          v1.0
+          v2.0
         </div>
       </header>
 
@@ -210,6 +223,14 @@ const App: React.FC = () => {
                </button>
              </div>
           </div>
+          
+          <InputGroup
+            label="Stop Loss Price"
+            value={activeState.stopLoss}
+            onChange={(v) => handleInputChange('stopLoss', v)}
+            placeholder="0.00"
+            suffix={<span className="text-slate-500 text-sm">USDT</span>}
+          />
         </div>
 
         {/* Results */}
@@ -225,14 +246,37 @@ const App: React.FC = () => {
             <ResultCard data={result.tp2} side={side} index={2} />
             <ResultCard data={result.tp3} side={side} index={3} />
 
-            {/* Total Potential */}
-            <div className="mt-6 p-4 rounded-2xl bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700/50">
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-medium text-slate-400">Total Projected Profit</span>
-                <span className="text-2xl font-mono font-bold text-success flex items-center">
-                  <span className="text-sm mr-1">$</span>
-                  {result.totalProfit.toFixed(2)}
-                </span>
+            {/* Risk & Reward Summary */}
+            <div className="mt-6 space-y-3">
+              <div className="p-4 rounded-2xl bg-slate-900/50 border border-red-900/30">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium text-slate-400">止损价格 (Stop Loss)</span>
+                  <span className="text-lg font-mono font-bold text-red-400">
+                    ${result.stopLoss.toFixed(4)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center mt-2">
+                  <span className="text-xs text-slate-500">风险金额 (Risk)</span>
+                  <span className="text-sm font-mono text-red-300">
+                    -${result.riskAmount.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+              
+              <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700/50">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium text-slate-400">总预期盈利 (Total Profit)</span>
+                  <span className="text-2xl font-mono font-bold text-success flex items-center">
+                    <span className="text-sm mr-1">$</span>
+                    {result.totalProfit.toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center mt-2">
+                  <span className="text-xs text-slate-500">盈亏比 (Risk:Reward)</span>
+                  <span className="text-sm font-mono text-emerald-300">
+                    1:{(result.totalProfit / result.riskAmount).toFixed(2)}
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -254,13 +298,29 @@ const App: React.FC = () => {
                     formatter={(value: number) => [value.toFixed(4), 'Price']}
                   />
                   <Bar dataKey="price" radius={[4, 4, 0, 0]}>
-                    {chartData.map((entry, index) => (
-                      <Cell 
-                        key={`cell-${index}`} 
-                        fill={entry.type === 'entry' ? '#94a3b8' : (side === PositionSide.LONG ? '#10b981' : '#f43f5e')} 
-                        fillOpacity={entry.type === 'entry' ? 0.3 : 1 - (index * 0.15)} // Fade out further TPs slightly
-                      />
-                    ))}
+                    {chartData.map((entry, index) => {
+                      let fill = '#94a3b8';
+                      let opacity = 0.3;
+                      
+                      if (entry.type === 'sl') {
+                        fill = '#ef4444';
+                        opacity = 0.8;
+                      } else if (entry.type === 'entry') {
+                        fill = '#94a3b8';
+                        opacity = 0.5;
+                      } else if (entry.type === 'tp') {
+                        fill = side === PositionSide.LONG ? '#10b981' : '#f43f5e';
+                        opacity = 1;
+                      }
+                      
+                      return (
+                        <Cell 
+                          key={`cell-${index}`} 
+                          fill={fill} 
+                          fillOpacity={opacity}
+                        />
+                      );
+                    })}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
