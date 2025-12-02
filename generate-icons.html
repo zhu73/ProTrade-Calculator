@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Generate Icons</title>
+</head>
+<body>
+  <canvas id="canvas192" width="192" height="192" style="display:none;"></canvas>
+  <canvas id="canvas512" width="512" height="512" style="display:none;"></canvas>
+  <h2>图标生成器</h2>
+  <p>点击下面的按钮下载应用图标：</p>
+  <button onclick="download192()">下载 192x192 图标</button>
+  <button onclick="download512()">下载 512x512 图标</button>
+  
+  <script>
+    function drawIcon(canvas) {
+      const ctx = canvas.getContext('2d');
+      const size = canvas.width;
+      const cornerRadius = size / 4;
+      
+      // Background with rounded corners
+      ctx.fillStyle = '#3b82f6';
+      ctx.beginPath();
+      ctx.roundRect(0, 0, size, size, cornerRadius);
+      ctx.fill();
+      
+      // Calculator icon
+      const center = size / 2;
+      const iconSize = size * 0.6;
+      
+      // White calculator outline
+      ctx.strokeStyle = 'white';
+      ctx.fillStyle = 'white';
+      ctx.lineWidth = size * 0.03;
+      
+      // Draw calculator body
+      const rectSize = iconSize * 0.7;
+      const rectX = center - rectSize / 2;
+      const rectY = center - rectSize / 2;
+      
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+      ctx.fillRect(rectX, rectY, rectSize, rectSize);
+      
+      // Draw display
+      ctx.fillStyle = 'white';
+      ctx.fillRect(rectX + rectSize * 0.1, rectY + rectSize * 0.1, rectSize * 0.8, rectSize * 0.2);
+      
+      // Draw buttons
+      const buttonSize = rectSize * 0.15;
+      const gap = rectSize * 0.08;
+      const startX = rectX + rectSize * 0.1;
+      const startY = rectY + rectSize * 0.4;
+      
+      for (let row = 0; row < 3; row++) {
+        for (let col = 0; col < 3; col++) {
+          ctx.fillStyle = 'white';
+          ctx.fillRect(
+            startX + col * (buttonSize + gap),
+            startY + row * (buttonSize + gap),
+            buttonSize,
+            buttonSize
+          );
+        }
+      }
+    }
+    
+    drawIcon(document.getElementById('canvas192'));
+    drawIcon(document.getElementById('canvas512'));
+    
+    function download192() {
+      const canvas = document.getElementById('canvas192');
+      canvas.toBlob(function(blob) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'icon-192.png';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      });
+    }
+    
+    function download512() {
+      const canvas = document.getElementById('canvas512');
+      canvas.toBlob(function(blob) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'icon-512.png';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      });
+    }
+  </script>
+</body>
+</html>

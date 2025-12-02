@@ -1,0 +1,5 @@
+{
+  "name": "ProTrade Calculator",
+  "description": "Professional crypto contract calculator for managing positions, leverage, and multi-stage take-profit targets.",
+  "requestFramePermissions": []
+}
