@@ -90,7 +90,7 @@ const App: React.FC = () => {
 
     const tp1 = calculateTarget(1.0, 0.5, 'TP1 (1:1) 50%仓位');
     const tp2 = calculateTarget(1.5, 0.3, 'TP2 (1:1.5) 30%仓位');
-    const tp3 = calculateTarget(3.5, 0.2, 'TP3 (1:3.5) 20%仓位');
+    const tp3 = calculateTarget(2.0, 0.2, 'TP3 (1:2) 20%仓位');
 
     const totalProfit = tp1.pnl + tp2.pnl + tp3.pnl;
 
